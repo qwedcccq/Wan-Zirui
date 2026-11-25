@@ -36,6 +36,10 @@ class ActionSpec:
     slot: str = ""                               # interchangeable group
     prerequisites: Tuple[str, ...] = field(default_factory=tuple)
     exclusions: Tuple[str, ...] = field(default_factory=tuple)
+    cost: str = ""                               # runtime / compute note
+    advantages: str = ""                         # advantages over same-slot methods
+    failure_conditions: str = ""                 # when the method must not be used
+    provenance: str = ""                         # literature or measurement source
 
 
 class ActionRegistry:
@@ -59,6 +63,10 @@ class ActionRegistry:
         slot: str = "",
         prerequisites: Iterable[str] = (),
         exclusions: Iterable[str] = (),
+        cost: str = "",
+        advantages: str = "",
+        failure_conditions: str = "",
+        provenance: str = "",
         replace: bool = False,
     ) -> None:
         if name in self._specs and not replace:
@@ -69,6 +77,8 @@ class ActionRegistry:
             name=name, stage=stage, fn=fn, description=description,
             paradigm=paradigm, slot=slot,
             prerequisites=tuple(prerequisites), exclusions=tuple(exclusions),
+            cost=cost, advantages=advantages,
+            failure_conditions=failure_conditions, provenance=provenance,
         )
 
     def register_many(self, names: Iterable[str], fn: Optional[Any] = None,
@@ -76,10 +86,13 @@ class ActionRegistry:
                       paradigm: str = "", slot: str = "",
                       prerequisites: Iterable[str] = (),
                       exclusions: Iterable[str] = (),
+                      cost: str = "", advantages: str = "",
+                      failure_conditions: str = "", provenance: str = "",
                       replace: bool = False) -> None:
         for name in names:
             self.register(name, fn, stage, description, paradigm, slot,
-                          prerequisites, exclusions, replace)
+                          prerequisites, exclusions, cost, advantages,
+                          failure_conditions, provenance, replace)
 
     def executable(self) -> set:
         return {s.name for s in self._specs.values() if s.fn is not None}

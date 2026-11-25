@@ -20,7 +20,7 @@ from __future__ import annotations
 import csv
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 FIELDS = ("context", "state_key", "action", "subject", "gain", "source")
 
@@ -58,6 +58,7 @@ class CalibrationMemory:
         min_subjects: int,
         strong_gain: float,
         separable_gain: float,
+        action_space: Optional[Iterable[str]] = None,
         path: Optional[str] = None,
     ):
         if min_subjects < 1:
@@ -69,6 +70,7 @@ class CalibrationMemory:
         self.min_subjects = int(min_subjects)
         self.strong_gain = float(strong_gain)
         self.separable_gain = float(separable_gain)
+        self.action_space: List[str] = sorted(set(action_space)) if action_space else []
         self._rows: List[Entry] = []
         self.path = path
         if path and os.path.exists(path):
@@ -220,6 +222,23 @@ class CalibrationMemory:
             "n_subjects": answer.n_subjects,
             "contexts": list(answer.contexts),
             "low_confidence": answer.n_subjects < self.min_subjects,
+        }
+
+    def subject_lists(self, context: str, state_key: str) -> Dict[str, List[str]]:
+        """Calibration-side subject list per action for one state."""
+        out: Dict[str, set] = {}
+        for r in self._rows:
+            if r.context == context and r.state_key == state_key:
+                out.setdefault(r.action, set()).add(r.subject)
+        return {action: sorted(subjects) for action, subjects in out.items()}
+
+    def metadata(self) -> Dict[str, object]:
+        """Table-level metadata recorded alongside the gains."""
+        return {
+            "action_space": list(self.action_space),
+            "n_entries": len(self._rows),
+            "contexts": sorted({r.context for r in self._rows}),
+            "states": sorted({r.state_key for r in self._rows}),
         }
 
     def __len__(self) -> int:

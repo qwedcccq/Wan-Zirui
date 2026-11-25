@@ -53,10 +53,10 @@ def _pipeline(memory, kg=None, prescriber=_USE_DEFAULT, do_no_harm=None,
     )
 
 
-def _memory(min_subjects=2, strong_gain=0.10, separable=0.05):
+def _memory(min_subjects=2, strong_gain=0.10, separable=0.05, action_space=None):
     return CalibrationMemory(clip_lo=-0.5, clip_hi=1.5,
                              min_subjects=min_subjects, strong_gain=strong_gain,
-                             separable_gain=separable)
+                             separable_gain=separable, action_space=action_space)
 
 
 # ---------------------------------------------------------------- basics
@@ -343,6 +343,33 @@ def test_validate_all_requires_rates():
     assert passed is False
     assert checks["all_passed"] is False
     assert checks["self_eval"] is False
+
+
+def test_action_spec_metadata():
+    registry = ActionRegistry()
+    registry.register(
+        "my_filter", lambda rec, fs_: rec,
+        paradigm="mi", slot="filtering",
+        cost="2 s/channel", advantages="preserves mu band",
+        failure_conditions="not for sleep staging",
+        provenance="literature",
+    )
+    spec = registry.get("my_filter")
+    assert spec.cost == "2 s/channel"
+    assert spec.advantages == "preserves mu band"
+    assert spec.failure_conditions == "not for sleep staging"
+    assert spec.provenance == "literature"
+
+
+def test_memory_subject_lists_and_metadata():
+    memory = _memory(action_space=["placeholder_a", "placeholder_b"])
+    memory.write_back(CONTEXT, "line_noise", "placeholder_b", "s1", 0.10)
+    memory.write_back(CONTEXT, "line_noise", "placeholder_b", "s2", 0.12)
+    lists = memory.subject_lists(CONTEXT, "line_noise")
+    assert lists["placeholder_b"] == ["s1", "s2"]
+    meta = memory.metadata()
+    assert meta["action_space"] == ["placeholder_a", "placeholder_b"]
+    assert meta["n_entries"] == 2
 
 
 def test_holm_known_values():
