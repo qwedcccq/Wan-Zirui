@@ -93,11 +93,13 @@ class ActionRegistry:
 
         A paradigm filter matches exactly; an action registered with
         ``paradigm="*"`` is treated as paradigm-general.  Unlabelled actions
-        are not returned for a specific paradigm.
+        are not returned for a specific paradigm.  ``by(paradigm="*")``
+        returns every registered action.
         """
         out = []
         for spec in self._specs.values():
-            if paradigm is not None and spec.paradigm not in (paradigm, "*"):
+            if (paradigm is not None and paradigm != "*"
+                    and spec.paradigm not in (paradigm, "*")):
                 continue
             if slot is not None and spec.slot != slot:
                 continue

@@ -312,15 +312,38 @@ class MetaPromptController:
         action_sets: Sequence[Sequence[str]],
         anchors: Sequence[str] = (),
         required_fields: Sequence[str] = (),
+        valid_rate_before: Optional[float] = None,
+        valid_rate_after: Optional[float] = None,
+        confidence_before: Optional[float] = None,
+        confidence_after: Optional[float] = None,
+        tolerance: float = 0.0,
+        allow_empty_constraint: bool = False,
     ) -> Tuple[bool, Dict[str, bool]]:
-        """Run the three validation layers and return ``(passed, detail)``."""
+        """Run the three validation layers and return ``(passed, detail)``.
+
+        The constraint layer is mandatory: when neither ``anchors`` nor
+        ``required_fields`` is given, it fails unless the caller explicitly
+        passes ``allow_empty_constraint=True``.  ``detail`` always contains
+        ``all_passed`` so the dict can be handed to ``adopt`` unchanged.
+        """
+        constraint_ok = self.validate_constraint(candidate_prompt, anchors, required_fields)
+        if not anchors and not required_fields and not allow_empty_constraint:
+            constraint_ok = False
         checks = {
             "structural": self.validate_structural(candidate_prompt, executable, parse),
-            "constraint": self.validate_constraint(candidate_prompt, anchors, required_fields),
+            "constraint": constraint_ok,
             "downstream": self.validate_downstream(results, alpha),
-            "self_eval": self.validate_self_eval(action_sets),
+            "self_eval": self.validate_self_eval(
+                action_sets,
+                valid_rate_before=valid_rate_before,
+                valid_rate_after=valid_rate_after,
+                confidence_before=confidence_before,
+                confidence_after=confidence_after,
+                tolerance=tolerance,
+            ),
         }
-        return all(checks.values()), checks
+        checks["all_passed"] = all(checks.values())
+        return checks["all_passed"], checks
 
     # ------------------------------------------------------------- adopt
     def adopt(
@@ -330,8 +353,8 @@ class MetaPromptController:
         rationale: str,
         validation: Dict[str, object],
     ) -> PromptVersion:
-        """Archive a candidate; refuse when validation says it did not pass."""
-        if validation.get("all_passed") is False:
+        """Archive a candidate; refuse unless validation explicitly passed."""
+        if validation.get("all_passed") is not True:
             raise ValueError("candidate did not pass all three validation layers")
         parent = self.archive.current
         return self.archive.add(source_label, candidate_prompt, parent, rationale, validation)

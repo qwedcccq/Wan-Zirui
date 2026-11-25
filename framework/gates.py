@@ -82,26 +82,33 @@ class GateController:
         do_no_harm: Optional[Callable[[str], bool]],
         reuse: bool,
         rule_source: Optional[Source] = None,
+        candidates: Optional[set] = None,
     ) -> Decision:
         """Resolve the final action.
 
         - strong evidence: the memory action is final; an LLM deviation is
           rejected as a safety fallback.  ``reused`` records whether the
           pre-gate actually skipped consultation.
-        - ``rule_source`` given (deterministic mode): return ``memory_action``
-          (the backbone) with that source, without consulting a model.
-        - otherwise: adopt the LLM action when it is executable and passes
-          do-no-harm; else the knowledge-graph action; else no processing.
+        - ``rule_source`` given (deterministic mode): return the backbone when
+          it is executable; otherwise the KG action; otherwise no processing.
+        - otherwise: adopt the LLM action when it is executable, inside
+          ``candidates``, and passes do-no-harm; else the KG action; else no
+          processing.
         """
         if strong:
             return Decision(memory_action, Source.MEMORY, True, reuse)
 
         if rule_source is not None:
-            return Decision(memory_action, rule_source, False, False)
+            if memory_action in executable:
+                return Decision(memory_action, rule_source, False, False)
+            if kg_action is not None and kg_action in executable:
+                return Decision(kg_action, Source.KG, False, False)
+            return Decision("none", Source.NONE, False, False)
 
         if llm_action is not None and llm_action in executable:
+            inside = candidates is None or llm_action in candidates
             # fail closed: without a do-no-harm callback the LLM action is not adopted
-            if do_no_harm is not None and do_no_harm(llm_action):
+            if inside and do_no_harm is not None and do_no_harm(llm_action):
                 return Decision(llm_action, Source.LLM, False, False)
         if kg_action is not None and kg_action in executable:
             return Decision(kg_action, Source.KG, False, False)

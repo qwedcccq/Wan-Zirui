@@ -121,6 +121,7 @@ class DecisionPipeline:
                   if self.default_action in candidates else candidates[0])
         anchor_answer = self.memory.answer_any(self.context, state_keys, anchor)
         if (anchor_answer is not None and action != anchor
+                and anchor_answer.n_subjects >= self.memory.min_subjects
                 and answer.gain - anchor_answer.gain < self.memory.separable_gain):
             action, answer = anchor, anchor_answer
 
@@ -132,15 +133,22 @@ class DecisionPipeline:
         self, state_keys: List[str], kg_order: List[str],
         backbone: Optional[str],
     ) -> List[str]:
-        """Memory-rewritten candidate order: backbone first, then by memory gain."""
+        """Memory-rewritten candidate order: backbone first, then by memory gain.
+
+        Only answers that reach ``min_subjects`` may reorder the list; a
+        low-confidence memory entry never moves ahead of the skeleton.
+        """
+        if backbone is None:
+            return list(kg_order)
         scored = []
         for action in kg_order:
             answer = self.memory.answer_any(self.context, state_keys, action)
-            scored.append((action, answer.gain if answer else float("-inf")))
+            if answer is not None and answer.n_subjects >= self.memory.min_subjects:
+                scored.append((action, answer.gain))
         scored.sort(key=lambda t: t[1], reverse=True)
         order = [a for a, _ in scored]
-        if backbone is not None:
-            order = [backbone] + [a for a in order if a != backbone]
+        order += [a for a in kg_order if a not in order]
+        order = [backbone] + [a for a in order if a != backbone]
         return order
 
     # ------------------------------------------------------------------
@@ -170,7 +178,8 @@ class DecisionPipeline:
                 raw_candidates.extend(self.kg.candidates(key))
         kg_candidates = [c for c in dict.fromkeys(raw_candidates)
                          if c in self.registry.candidates()]
-        if not kg_candidates:
+        executable_candidates = [c for c in kg_candidates if c in executable]
+        if not kg_candidates or not executable_candidates:
             decision = Decision("none", Source.NONE, False, False)
             return PipelineDecision(
                 decision, state_key, [], None,
@@ -181,17 +190,19 @@ class DecisionPipeline:
                  "median_confidence": None},
             )
         kg_order = self._kg_order(state_keys, kg_candidates)
+        kg_executable_order = [c for c in kg_order if c in executable]
+        kg_top = kg_executable_order[0]
 
         # 4. memory rewrites the order; low confidence falls back to skeleton
         memory_action, memory_gain, n_subjects, memory_contexts = self._memory_backbone(
-            state_keys, kg_candidates
+            state_keys, executable_candidates
         )
-        memory_order = self._memory_order(state_keys, kg_order, memory_action)
+        memory_order = self._memory_order(state_keys, kg_executable_order, memory_action)
 
         if memory_action is not None:
             a_b, gain_b, b_source = memory_action, memory_gain, Source.MEMORY
         else:
-            a_b, gain_b, b_source = kg_order[0], None, Source.KG
+            a_b, gain_b, b_source = kg_top, None, Source.KG
             n_subjects = 0
 
         strong = self.gates.is_strong(
@@ -209,7 +220,7 @@ class DecisionPipeline:
                 decision, state_key, memory_order, gain_b,
                 {"path": "memory_reuse", "strong": True, "reused": True,
                  "backbone_action": a_b, "memory_action": memory_action,
-                 "kg_action": kg_order[0], "llm_action": None,
+                 "kg_action": kg_top, "llm_action": None,
                  "memory_contexts": memory_contexts,
                  "memory_provenance": provenance,
                  "divergence": signal.divergence if signal else None,
@@ -221,21 +232,21 @@ class DecisionPipeline:
         if self.prescriber is None:
             rule_source = Source.MEMORY if memory_action is not None else Source.KG
             decision = self.gates.post_gate(
-                strong, a_b, a_b, kg_order[0], executable,
+                strong, a_b, a_b, kg_top, executable,
                 do_no_harm=self.do_no_harm, reuse=self.reuse,
-                rule_source=rule_source,
+                rule_source=rule_source, candidates=memory_order,
             )
         else:
             llm_action = self.prescriber(state_key, memory_order, materials or {})
             decision = self.gates.post_gate(
-                strong, a_b, llm_action, kg_order[0], executable,
-                do_no_harm=self.do_no_harm, reuse=self.reuse,
+                strong, a_b, llm_action, kg_top, executable,
+                do_no_harm=self.do_no_harm, reuse=self.reuse, candidates=memory_order,
             )
         return PipelineDecision(
             decision, state_key, memory_order, gain_b,
             {"path": "prescription", "strong": strong, "reused": decision.reused,
              "backbone_action": a_b, "memory_action": memory_action,
-             "kg_action": kg_order[0], "llm_action": llm_action,
+             "kg_action": kg_top, "llm_action": llm_action,
              "llm_adopted": decision.source == Source.LLM,
              "memory_contexts": memory_contexts,
              "memory_provenance": provenance,

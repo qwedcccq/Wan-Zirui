@@ -5,11 +5,11 @@ graph contents, and measured gains are supplied by the reader.
 """
 
 from .evaluation import family_test, families_test, holm, paired_differences, paired_t_ci, wilcoxon_p
-from .executor import ActionRegistry, ActionSpec
+from .executor import ActionFn, ActionRegistry, ActionSpec, FeatureActionFn
 from .fingerprint import Fingerprinter, band_ratio_fingerprint, concat_fingerprint
 from .gates import Decision, GateController, Source
 from .knowledge_graph import DictKnowledgeGraph, KnowledgeGraph
-from .memory import CalibrationMemory, Entry
+from .memory import CalibrationMemory, Entry, MemoryAnswer
 from .pipeline import DecisionPipeline, PipelineDecision
 from .prescription import (
     DecisionRecord,
@@ -33,8 +33,10 @@ from .state_set import (
 )
 
 __all__ = [
+    "ActionFn",
     "ActionRegistry",
     "ActionSpec",
+    "FeatureActionFn",
     "CalibrationMemory",
     "DETERMINISTIC_CANDIDATES",
     "ERP_DETERMINISTIC_CANDIDATES",
@@ -48,6 +50,7 @@ __all__ = [
     "GenerationResult",
     "HINT_CANDIDATES",
     "KnowledgeGraph",
+    "MemoryAnswer",
     "MetaPromptController",
     "PipelineDecision",
     "Prescriber",

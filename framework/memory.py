@@ -151,7 +151,9 @@ class CalibrationMemory:
         answers = [a for a in answers if a is not None]
         if not answers:
             return None
-        return max(answers, key=lambda a: a.gain)
+        confident = [a for a in answers if a.n_subjects >= self.min_subjects]
+        pool = confident or answers
+        return max(pool, key=lambda a: a.gain)
 
     def ranked(self, context: str, state_key: str) -> List[Tuple[str, float]]:
         actions = sorted({r.action for r in self._rows

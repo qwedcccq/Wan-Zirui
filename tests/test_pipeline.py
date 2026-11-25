@@ -18,6 +18,7 @@ from framework import (  # noqa: E402
     DictKnowledgeGraph,
     GateController,
     GenerationResult,
+    MetaPromptController,
     PromptArchive,
     TemplatePrescriber,
     holm,
@@ -193,6 +194,90 @@ def test_by_paradigm_excludes_unlabelled():
     registry.register("mi_action", lambda rec, fs: rec, paradigm="mi")
     assert registry.by(paradigm="mi") == ["mi_action"]
     assert registry.by(paradigm="ssvep") == []
+
+
+def test_low_confidence_not_promoted_in_candidates():
+    fs, _, _, _, _, _, _, _ = _parts()
+    memory = _memory(min_subjects=3)
+    memory.write_back(CONTEXT, "line_noise", "placeholder_a", "s1", 0.50)
+    fs, pipeline = _pipeline(memory)
+    out = pipeline.decide(synthetic_record(fs), fs)
+    # KG top is placeholder_b; a low-confidence memory entry must not move ahead
+    assert out.candidates[0] == "placeholder_b"
+
+
+def test_decision_only_never_final():
+    fs, _, fingerprinter, detector, _, _, _, gates = _parts()
+    registry = ActionRegistry()
+    registry.register("decision_only", None)
+    registry.register("placeholder_a", lambda rec, fs_: rec.copy())
+    kg = DictKnowledgeGraph({
+        "line_noise": [("decision_only", 1.0), ("placeholder_a", 0.5)],
+        "normal_unknown": [("placeholder_a", 1.0)],
+    })
+    pipeline = DecisionPipeline(
+        fingerprinter=fingerprinter, detector=detector, knowledge_graph=kg,
+        memory=_memory(), gates=gates, registry=registry, context=CONTEXT,
+        do_no_harm=lambda action: True, prescriber=None,
+    )
+    out = pipeline.decide(synthetic_record(fs), fs)
+    assert out.decision.action == "placeholder_a"
+
+
+def test_adopt_requires_passed():
+    archive = PromptArchive()
+    controller = MetaPromptController(
+        archive, trigger_count=2, divergence_threshold=0.5,
+        confidence_threshold=0.5, generation_temperature=0.0,
+        min_improved_conditions=1, max_worsened_conditions=0,
+        jaccard_threshold=0.5,
+    )
+    try:
+        controller.adopt("prompt", "label", "why", {"all_passed": False})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("adopt accepted a candidate that did not pass")
+
+
+def test_anchor_low_confidence_not_used():
+    fs, _, _, _, _, _, _, _ = _parts()
+    memory = _memory(min_subjects=3, separable=0.05)
+    for subject in ("s1", "s2", "s3"):
+        memory.write_back(CONTEXT, "line_noise", "placeholder_b", subject, 0.20)
+    memory.write_back(CONTEXT, "line_noise", "placeholder_a", "s1", 0.19)
+    fs, pipeline = _pipeline(memory)
+    out = pipeline.decide(synthetic_record(fs), fs)
+    assert out.log["backbone_action"] == "placeholder_b"
+
+
+def test_answer_any_prefers_confident():
+    memory = _memory(min_subjects=3)
+    for subject in ("s1", "s2", "s3"):
+        memory.write_back(CONTEXT, "line_noise", "placeholder_b", subject, 0.20)
+    memory.write_back(CONTEXT, "emg", "placeholder_b", "s1", 0.50)
+    answer = memory.answer_any(CONTEXT, ["line_noise", "emg"], "placeholder_b")
+    assert answer.n_subjects == 3
+
+
+def test_llm_action_must_be_in_candidates():
+    fs, registry, fingerprinter, detector, _, _, _, gates = _parts()
+    kg = DictKnowledgeGraph({"line_noise": [("placeholder_a", 1.0)]})
+    prescriber = TemplatePrescriber(lambda prompt: "placeholder_b", "demo", "{}")
+    pipeline = DecisionPipeline(
+        fingerprinter=fingerprinter, detector=detector, knowledge_graph=kg,
+        memory=_memory(), gates=gates, registry=registry, context=CONTEXT,
+        do_no_harm=lambda action: True, prescriber=prescriber,
+    )
+    out = pipeline.decide(synthetic_record(fs), fs)
+    assert out.decision.action == "placeholder_a"
+
+
+def test_by_star_returns_all():
+    registry = ActionRegistry()
+    registry.register("x", lambda rec, fs_: rec)
+    registry.register("y", lambda rec, fs_: rec, paradigm="mi")
+    assert registry.by(paradigm="*") == ["x", "y"]
 
 
 def test_holm_known_values():

@@ -8,8 +8,8 @@ This package contains the **framework only** described in the paper. It contains
 - no concrete preprocessing methods.
 
 Every method, state detector, knowledge-graph edge, and action implementation is left for
-the reader to supply. A list of reference papers for the methods used in the paper is in
-`REFERENCES.md`.
+the reader to supply. `REFERENCES.md` is an optional reading list of method-family papers;
+it is not a method registry and carries no parameter from the paper.
 
 ## What the framework provides
 

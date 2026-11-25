@@ -95,17 +95,20 @@ def build_demo():
     return fs, registry, fingerprinter, detector, kg, memory, prescriber, gates
 
 
-def calibrate(pipeline, records, score_fn, subject, memory, fs):
+def calibrate(pipeline, records, score_fn, subject, memory, fs,
+              epochs=None, labels=None):
     """Calibration loop: decide, execute, score, write paired gains back.
 
-    ``score_fn(record, subject) -> float`` is the reader's judge (a decoder
-    evaluated on held-out folds).  Gains are written per single state, so a
-    multi-state record contributes to each state it hits.
+    ``score_fn(record, subject) -> float`` is the reader's judge.  This is a
+    **single-pass scaffold**, not the paired-fold protocol of the paper: wrap
+    it in your own fold/repeat loop.  Feature-stage decisions need ``epochs``
+    and ``labels``; no-processing decisions execute as keep-as-is.
     """
     written = []
     for record in records:
         result = pipeline.decide(record, fs)
-        processed = pipeline.execute(record, fs, result.decision)
+        processed = pipeline.execute(record, fs, result.decision,
+                                     epochs=epochs, labels=labels)
         gain = (score_fn(processed, subject) - score_fn(record, subject)) * 100.0
         for key in result.state_key.split("|"):
             memory.write_back(pipeline.context, key, result.decision.action,

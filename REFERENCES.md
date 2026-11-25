@@ -1,9 +1,9 @@
-# Reference papers for the reader-supplied methods
+# Optional reading: method families
 
-The framework in this package contains no preprocessing method.  If you want to
-rebuild a system comparable to the paper's, the methods used there are
-documented in the following sources.  Each entry names the method family; the
-implementation and its parameters are yours to choose.
+The framework in this package contains no preprocessing method.  The references
+below point to method families that a reader may choose to implement.  They are
+not a method registry, no implementation is included, and no parameter from the
+paper is given.
 
 ## Filtering and referencing
 
