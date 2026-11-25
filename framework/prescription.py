@@ -318,29 +318,38 @@ class MetaPromptController:
         confidence_after: Optional[float] = None,
         tolerance: float = 0.0,
         allow_empty_constraint: bool = False,
+        allow_missing_self_eval: bool = False,
     ) -> Tuple[bool, Dict[str, bool]]:
         """Run the three validation layers and return ``(passed, detail)``.
 
         The constraint layer is mandatory: when neither ``anchors`` nor
         ``required_fields`` is given, it fails unless the caller explicitly
-        passes ``allow_empty_constraint=True``.  ``detail`` always contains
-        ``all_passed`` so the dict can be handed to ``adopt`` unchanged.
+        passes ``allow_empty_constraint=True``.  The self-evaluation layer
+        requires the success-rate and confidence pairs; when they are missing
+        it fails unless ``allow_missing_self_eval=True``.  ``detail`` always
+        contains ``all_passed`` so the dict can be handed to ``adopt``
+        unchanged.
         """
         constraint_ok = self.validate_constraint(candidate_prompt, anchors, required_fields)
         if not anchors and not required_fields and not allow_empty_constraint:
             constraint_ok = False
+        self_eval_ok = self.validate_self_eval(
+            action_sets,
+            valid_rate_before=valid_rate_before,
+            valid_rate_after=valid_rate_after,
+            confidence_before=confidence_before,
+            confidence_after=confidence_after,
+            tolerance=tolerance,
+        )
+        have_rates = (valid_rate_before is not None and valid_rate_after is not None
+                      and confidence_before is not None and confidence_after is not None)
+        if not have_rates and not allow_missing_self_eval:
+            self_eval_ok = False
         checks = {
             "structural": self.validate_structural(candidate_prompt, executable, parse),
             "constraint": constraint_ok,
             "downstream": self.validate_downstream(results, alpha),
-            "self_eval": self.validate_self_eval(
-                action_sets,
-                valid_rate_before=valid_rate_before,
-                valid_rate_after=valid_rate_after,
-                confidence_before=confidence_before,
-                confidence_after=confidence_after,
-                tolerance=tolerance,
-            ),
+            "self_eval": self_eval_ok,
         }
         checks["all_passed"] = all(checks.values())
         return checks["all_passed"], checks

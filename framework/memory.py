@@ -210,7 +210,8 @@ class CalibrationMemory:
                 "contexts": [],
                 "low_confidence": True,
             }
-        answer = max(answers, key=lambda a: a.gain)
+        confident = [a for a in answers if a.n_subjects >= self.min_subjects]
+        answer = max(confident or answers, key=lambda a: a.gain)
         return {
             "context": context,
             "state_keys": list(state_keys),

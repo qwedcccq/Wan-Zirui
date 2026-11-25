@@ -114,8 +114,13 @@ class DecisionPipeline:
                 answers.append((action, answer))
         if not answers:
             return None, None, 0, []
-        answers.sort(key=lambda t: t[1].gain, reverse=True)
-        action, answer = answers[0]
+        confident = [(a, ans) for a, ans in answers
+                     if ans.n_subjects >= self.memory.min_subjects]
+        if not confident:
+            best = max(answers, key=lambda t: t[1].gain)
+            return None, None, best[1].n_subjects, list(best[1].contexts)
+        confident.sort(key=lambda t: t[1].gain, reverse=True)
+        action, answer = confident[0]
 
         anchor = (self.default_action
                   if self.default_action in candidates else candidates[0])
@@ -124,9 +129,6 @@ class DecisionPipeline:
                 and anchor_answer.n_subjects >= self.memory.min_subjects
                 and answer.gain - anchor_answer.gain < self.memory.separable_gain):
             action, answer = anchor, anchor_answer
-
-        if answer.n_subjects < self.memory.min_subjects:
-            return None, None, answer.n_subjects, list(answer.contexts)
         return action, answer.gain, answer.n_subjects, list(answer.contexts)
 
     def _memory_order(

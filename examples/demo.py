@@ -107,9 +107,16 @@ def calibrate(pipeline, records, score_fn, subject, memory, fs,
     written = []
     for record in records:
         result = pipeline.decide(record, fs)
-        processed = pipeline.execute(record, fs, result.decision,
-                                     epochs=epochs, labels=labels)
-        gain = (score_fn(processed, subject) - score_fn(record, subject)) * 100.0
+        spec = (pipeline.registry.get(result.decision.action)
+                if result.decision.action != "none" else None)
+        baseline = score_fn(record, subject)
+        if spec is not None and spec.stage == "feature":
+            feature_score = pipeline.execute(record, fs, result.decision,
+                                             epochs=epochs, labels=labels)
+            gain = (feature_score - baseline) * 100.0
+        else:
+            processed = pipeline.execute(record, fs, result.decision)
+            gain = (score_fn(processed, subject) - baseline) * 100.0
         for key in result.state_key.split("|"):
             memory.write_back(pipeline.context, key, result.decision.action,
                               subject, gain, source="calibration")

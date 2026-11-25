@@ -280,6 +280,71 @@ def test_by_star_returns_all():
     assert registry.by(paradigm="*") == ["x", "y"]
 
 
+def test_confident_action_not_masked_by_low_confidence():
+    fs, _, _, _, _, _, _, _ = _parts()
+    memory = _memory(min_subjects=3)
+    for subject in ("s1", "s2", "s3"):
+        memory.write_back(CONTEXT, "line_noise", "placeholder_b", subject, 0.20)
+    memory.write_back(CONTEXT, "line_noise", "placeholder_a", "s1", 0.50)
+    fs, pipeline = _pipeline(memory)
+    out = pipeline.decide(synthetic_record(fs), fs)
+    assert out.log["memory_action"] == "placeholder_b"
+
+
+def test_provenance_matches_confident_answer():
+    memory = _memory(min_subjects=3)
+    for subject in ("s1", "s2", "s3"):
+        memory.write_back(CONTEXT, "line_noise", "placeholder_b", subject, 0.20)
+    memory.write_back(CONTEXT, "emg", "placeholder_b", "s1", 0.50)
+    prov = memory.provenance(CONTEXT, ["line_noise", "emg"], "placeholder_b")
+    assert prov["n_subjects"] == 3
+    assert prov["low_confidence"] is False
+
+
+def test_calibrate_feature_stage_gain():
+    from demo import calibrate
+    fs, _, fingerprinter, detector, _, _, _, gates = _parts()
+    registry = ActionRegistry()
+    registry.register("feature_a", lambda epochs, labels: 0.5, stage="feature")
+    kg = DictKnowledgeGraph({"line_noise": [("feature_a", 1.0)]})
+    memory = _memory()
+    pipeline = DecisionPipeline(
+        fingerprinter=fingerprinter, detector=detector, knowledge_graph=kg,
+        memory=memory, gates=gates, registry=registry, context=CONTEXT,
+        do_no_harm=lambda action: True, prescriber=None,
+    )
+    written = calibrate(pipeline, [synthetic_record(fs)],
+                        score_fn=lambda rec, subject: 0.2,
+                        subject="s1", memory=memory, fs=fs,
+                        epochs=np.zeros((2, 3, 10)), labels=np.array([0, 1]))
+    state, action, gain = written[0]
+    assert action == "feature_a"
+    assert abs(gain - 30.0) < 1e-6
+
+
+def test_validate_all_requires_rates():
+    archive = PromptArchive()
+    controller = MetaPromptController(
+        archive, trigger_count=2, divergence_threshold=0.5,
+        confidence_threshold=0.5, generation_temperature=0.0,
+        min_improved_conditions=1, max_worsened_conditions=0,
+        jaccard_threshold=0.5,
+    )
+    passed, checks = controller.validate_all(
+        candidate_prompt="a a",
+        executable={"a"},
+        parse=lambda text: "a",
+        results=[("c", 0.1, 0.01)],
+        alpha=0.05,
+        action_sets=[["a"], ["a"]],
+        anchors=("a",),
+        required_fields=("a",),
+    )
+    assert passed is False
+    assert checks["all_passed"] is False
+    assert checks["self_eval"] is False
+
+
 def test_holm_known_values():
     adjusted = holm([0.01, 0.04, 0.03])
     assert np.allclose(adjusted, [0.03, 0.06, 0.06])
