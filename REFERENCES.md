@@ -1,9 +1,8 @@
-# Optional reading: method families
+# Method families and sources
 
-The framework in this package contains no preprocessing method.  The references
-below point to method families that a reader may choose to implement.  They are
-not a method registry, no implementation is included, and no parameter from the
-paper is given.
+Papers you can draw on when implementing your methods.  Each entry names a
+method family (filtering, artifact handling, spatial filtering, statistics);
+the implementation and its parameters are yours to choose.
 
 ## Filtering and referencing
 
