@@ -145,3 +145,10 @@ default and reports a warning when it falls back.
 - **Model**: implement `Prescriber` (or wrap your model in `TemplatePrescriber`).
 
 `REFERENCES.md` lists method-family papers you can draw on.
+
+## License and citation
+
+MIT-licensed (see `LICENSE`). Citation metadata is in `CITATION.cff`; GitHub
+renders a "Cite this repository" button from it. The paper cites this
+repository directly, so `main` is kept as the version of record: cite the
+repository URL, not a tag.

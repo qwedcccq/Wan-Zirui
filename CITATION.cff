@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this harness, please cite the repository (and the associated paper once it is published)."
+type: software
+title: "LLM-assisted EEG preprocessing harness"
+abstract: >-
+  Reference implementation of a state-conditioned EEG preprocessing decision:
+  a record is compressed into a fingerprint and mapped to a state set, an action
+  is selected from a finite candidate set by a knowledge graph, a calibration
+  memory of measured gains, and an optional language model with pre- and
+  post-gates, and decisions are scored by paired downstream measurement.
+authors:
+  - family-names: Wan
+    given-names: Zirui
+version: 1.2
+date-released: 2026-11-26
+license: MIT
+repository-code: "https://github.com/qwedcccq/Wan-Zirui"
+keywords:
+  - EEG
+  - preprocessing
+  - brain-computer interface
+  - large language model
+  - decision support
